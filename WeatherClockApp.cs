@@ -3,11 +3,13 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Script.Serialization;
@@ -43,6 +45,50 @@ namespace WeatherClock
 
     internal sealed class ClockWeatherForm : Form
     {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct PointNative
+        {
+            public int X;
+            public int Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MinMaxInfo
+        {
+            public PointNative Reserved;
+            public PointNative MaxSize;
+            public PointNative MaxPosition;
+            public PointNative MinTrackSize;
+            public PointNative MaxTrackSize;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RectNative
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private sealed class MonitorInfo
+        {
+            public int Size = Marshal.SizeOf(typeof(MonitorInfo));
+            public RectNative Monitor;
+            public RectNative Work;
+            public int Flags;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr handle, uint flags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool GetMonitorInfo(IntPtr monitor, MonitorInfo info);
+
+        private const int WmGetMinMaxInfo = 0x0024;
+        private const uint MonitorDefaultToNearest = 0x00000002;
+
         private static readonly string Degree = ((char)176).ToString();
         private readonly System.Windows.Forms.Timer clockTimer;
         private readonly System.Windows.Forms.Timer weatherTimer;
@@ -67,6 +113,8 @@ namespace WeatherClock
         private bool dragging;
         private Point dragStartCursor;
         private Point dragStartForm;
+        private bool isCustomMaximized;
+        private Rectangle restoreBounds;
 
         public ClockWeatherForm()
         {
@@ -85,6 +133,7 @@ namespace WeatherClock
             Icon = AppIcon();
             images = new ImageSet();
             CenterInWorkingArea();
+            restoreBounds = Bounds;
 
             trayIcon = new NotifyIcon
             {
@@ -161,7 +210,9 @@ namespace WeatherClock
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            g.CompositingQuality = CompositingQuality.HighQuality;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
             Rectangle bounds = ClientRectangle;
             DrawBackground(g, bounds);
@@ -225,6 +276,11 @@ namespace WeatherClock
             base.OnMouseDown(e);
 
             if (e.Button != MouseButtons.Left)
+            {
+                return;
+            }
+
+            if (isCustomMaximized)
             {
                 return;
             }
@@ -311,7 +367,7 @@ namespace WeatherClock
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            MaximizedBounds = Screen.FromHandle(Handle).WorkingArea;
+            MaximizedBounds = Screen.FromRectangle(Bounds).WorkingArea;
         }
 
         protected override void WndProc(ref Message m)
@@ -327,9 +383,14 @@ namespace WeatherClock
             const int HtBottomLeft = 16;
             const int HtBottomRight = 17;
 
+            if (m.Msg == WmGetMinMaxInfo)
+            {
+                ApplyMonitorMaxBounds(m.HWnd, m.LParam);
+            }
+
             base.WndProc(ref m);
 
-            if (m.Msg != WmNcHitTest || (int)m.Result != HtClient || WindowState != FormWindowState.Normal)
+            if (m.Msg != WmNcHitTest || (int)m.Result != HtClient || WindowState != FormWindowState.Normal || isCustomMaximized)
             {
                 return;
             }
@@ -352,6 +413,37 @@ namespace WeatherClock
             else if (right) m.Result = (IntPtr)HtRight;
             else if (top) m.Result = (IntPtr)HtTop;
             else if (bottom) m.Result = (IntPtr)HtBottom;
+        }
+
+        private static void ApplyMonitorMaxBounds(IntPtr handle, IntPtr lParam)
+        {
+            if (lParam == IntPtr.Zero)
+            {
+                return;
+            }
+
+            IntPtr monitor = MonitorFromWindow(handle, MonitorDefaultToNearest);
+            if (monitor == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var info = new MonitorInfo();
+            if (!GetMonitorInfo(monitor, info))
+            {
+                return;
+            }
+
+            MinMaxInfo mmi = (MinMaxInfo)Marshal.PtrToStructure(lParam, typeof(MinMaxInfo));
+            RectNative work = info.Work;
+            RectNative screen = info.Monitor;
+
+            mmi.MaxPosition.X = work.Left - screen.Left;
+            mmi.MaxPosition.Y = work.Top - screen.Top;
+            mmi.MaxSize.X = work.Right - work.Left;
+            mmi.MaxSize.Y = work.Bottom - work.Top;
+
+            Marshal.StructureToPtr(mmi, lParam, true);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -404,8 +496,25 @@ namespace WeatherClock
 
         private void ToggleMaximize()
         {
-            MaximizedBounds = Screen.FromHandle(Handle).WorkingArea;
-            WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+            if (!isCustomMaximized)
+            {
+                if (WindowState == FormWindowState.Minimized)
+                {
+                    WindowState = FormWindowState.Normal;
+                }
+
+                restoreBounds = Bounds;
+                Point formCenter = new Point(Left + Width / 2, Top + Height / 2);
+                Rectangle work = Screen.FromPoint(formCenter).WorkingArea;
+                Bounds = work;
+                isCustomMaximized = true;
+            }
+            else
+            {
+                Bounds = restoreBounds;
+                isCustomMaximized = false;
+            }
+
             UpdateWindowRegion();
             Invalidate();
         }
@@ -513,7 +622,7 @@ namespace WeatherClock
             settingsRect = new RectangleF(minimizeRect.Left - size - 18f, top, size, size);
 
             DrawWindowGlyph(g, minimizeRect, "minimize", minimizeHot);
-            DrawWindowGlyph(g, maximizeRect, WindowState == FormWindowState.Maximized ? "restore" : "maximize", maximizeHot);
+            DrawWindowGlyph(g, maximizeRect, isCustomMaximized || WindowState == FormWindowState.Maximized ? "restore" : "maximize", maximizeHot);
             DrawWindowGlyph(g, closeRect, "close", closeHot);
             DrawWindowGlyph(g, settingsRect, "settings", settingsHot);
 
@@ -599,15 +708,10 @@ namespace WeatherClock
 
         private void DrawTopWeather(Graphics g, RectangleF area, WeatherSnapshot snapshot)
         {
-            using (var divider = new Pen(Color.FromArgb(52, 190, 203, 214), 1f))
-            {
-                g.DrawLine(divider, area.Left, area.Bottom, area.Right, area.Bottom);
-            }
-
             float clusterWidth = Math.Min(area.Width * 0.38f, 440f);
             float clusterLeft = area.Left + Math.Max(34f, area.Width * 0.045f);
-            float iconSize = Math.Min(area.Height * 0.48f, clusterWidth * 0.18f);
-            var iconRect = new RectangleF(clusterLeft, area.Top + area.Height * 0.15f, iconSize, iconSize);
+            float iconSize = Math.Min(area.Height * 0.96f, clusterWidth * 0.36f);
+            var iconRect = new RectangleF(clusterLeft, area.Top + area.Height * 0.02f, iconSize, iconSize);
             DrawWeatherIcon(g, snapshot.CurrentIconKey, iconRect);
 
             float tempX = iconRect.Right + Math.Max(20f, clusterWidth * 0.075f);
@@ -619,22 +723,28 @@ namespace WeatherClock
             {
                 string temp = snapshot.CurrentTemperature.HasValue ? snapshot.CurrentTemperature.Value.ToString(CultureInfo.InvariantCulture) : "--";
                 SizeF tempMeasure = g.MeasureString(temp, tempFont, PointF.Empty, StringFormat.GenericTypographic);
+                SizeF degreeMeasure = g.MeasureString(Degree + "F", degreeFont, PointF.Empty, StringFormat.GenericTypographic);
                 float tempY = area.Top + (area.Height - tempMeasure.Height) / 2f - area.Height * 0.02f;
                 g.DrawString(temp, tempFont, mainBrush, tempX, tempY, StringFormat.GenericTypographic);
                 g.DrawString(Degree + "F", degreeFont, mainBrush, tempX + tempMeasure.Width + 4f, tempY + area.Height * 0.05f, StringFormat.GenericTypographic);
 
-                float conditionY = iconRect.Bottom + area.Height * 0.04f;
+                float conditionY = Math.Min(area.Bottom - area.Height * 0.30f, iconRect.Bottom + area.Height * 0.08f);
                 using (var conditionFont = new Font("Segoe UI", Math.Max(13f, area.Height * 0.145f), FontStyle.Regular, GraphicsUnit.Pixel))
-                using (var feelsFont = new Font("Segoe UI", Math.Max(12f, area.Height * 0.125f), FontStyle.Regular, GraphicsUnit.Pixel))
+                using (var feelsFont = new Font("Segoe UI", Math.Max(14f, area.Height * 0.16f), FontStyle.Regular, GraphicsUnit.Pixel))
                 using (var clipped = new StringFormat(StringFormat.GenericTypographic) { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
                 {
                     float conditionWidth = Math.Max(iconSize + 52f, clusterWidth * 0.46f);
-                    g.DrawString(snapshot.ConditionText, conditionFont, mainBrush, new RectangleF(iconRect.Left - 8f, conditionY, conditionWidth, area.Height * 0.22f), clipped);
+                    g.DrawString(snapshot.ConditionText, conditionFont, mainBrush, new RectangleF(iconRect.Left - 8f, conditionY, conditionWidth, area.Height * 0.24f), clipped);
                     string feels = snapshot.FeelsLike.HasValue ? "Feels like " + snapshot.FeelsLike.Value.ToString(CultureInfo.InvariantCulture) + Degree : snapshot.StatusText;
-                    g.DrawString(feels, feelsFont, mutedBrush, new RectangleF(iconRect.Left - 8f, conditionY + area.Height * 0.20f, conditionWidth, area.Height * 0.18f), clipped);
+                    g.DrawString(feels, feelsFont, mutedBrush, new RectangleF(iconRect.Left - 8f, conditionY + area.Height * 0.22f, conditionWidth, area.Height * 0.24f), clipped);
                 }
 
-                float stackLeft = Math.Min(clusterLeft + clusterWidth - Math.Max(96f, area.Width * 0.085f), tempX + tempMeasure.Width + area.Width * 0.055f);
+                float stackLeft = tempX + tempMeasure.Width + degreeMeasure.Width + Math.Max(24f, area.Width * 0.03f);
+                float minStackLeft = area.Left + area.Width * 0.24f;
+                if (stackLeft < minStackLeft)
+                {
+                    stackLeft = minStackLeft;
+                }
                 using (var labelFont = new Font("Segoe UI", Math.Max(13f, area.Height * 0.15f), FontStyle.Regular, GraphicsUnit.Pixel))
                 using (var valueFont = new Font("Segoe UI", Math.Max(15f, area.Height * 0.17f), FontStyle.Regular, GraphicsUnit.Pixel))
                 using (var labelBrush = new SolidBrush(Color.FromArgb(178, 205, 210, 221)))
@@ -657,7 +767,7 @@ namespace WeatherClock
 
         private void DrawClock(Graphics g, RectangleF area)
         {
-            float timeSize = FindBestFontSize(g, area, timeText, amPmText);
+            float timeSize = FitScaledTimeSize(g, area, 1.3f);
             using (var timeFont = new Font("Segoe UI", timeSize, FontStyle.Bold, GraphicsUnit.Pixel))
             using (var suffixFont = new Font("Segoe UI", timeSize * 0.22f, FontStyle.Regular, GraphicsUnit.Pixel))
             using (var dateFont = new Font("Segoe UI", Math.Max(22f, timeSize * 0.14f), FontStyle.Regular, GraphicsUnit.Pixel))
@@ -670,13 +780,17 @@ namespace WeatherClock
                 float totalWidth = timeSizeMeasured.Width + suffixSize.Width + 24f;
                 float dateGap = Math.Max(14f, timeSize * 0.08f);
                 float visibleTimeHeight = Math.Max(timeSizeMeasured.Height, timeSize * 0.92f);
-                float totalHeight = visibleTimeHeight + dateGap + dateSize.Height;
                 float x = area.Left + (area.Width - totalWidth) / 2f;
-                float y = area.Top + Math.Max(0f, (area.Height - totalHeight) / 2f);
+                float dateY = area.Bottom - dateSize.Height - Math.Max(34f, area.Height * 0.12f);
+                float y = dateY - dateGap - visibleTimeHeight;
+                if (y < area.Top)
+                {
+                    y = area.Top;
+                }
 
                 g.DrawString(timeText, timeFont, timeBrush, x, y, StringFormat.GenericTypographic);
                 g.DrawString(amPmText, suffixFont, dateBrush, x + timeSizeMeasured.Width + 18f, y + visibleTimeHeight * 0.58f, StringFormat.GenericTypographic);
-                g.DrawString(dateText, dateFont, dateBrush, area.Left + (area.Width - dateSize.Width) / 2f, y + visibleTimeHeight + dateGap, StringFormat.GenericTypographic);
+                g.DrawString(dateText, dateFont, dateBrush, area.Left + (area.Width - dateSize.Width) / 2f, dateY, StringFormat.GenericTypographic);
             }
         }
 
@@ -715,6 +829,34 @@ namespace WeatherClock
             }
 
             return low;
+        }
+
+        private float FitScaledTimeSize(Graphics g, RectangleF area, float scale)
+        {
+            float size = FindBestFontSize(g, area, timeText, amPmText) * scale;
+            for (int i = 0; i < 12; i++)
+            {
+                using (var timeFont = new Font("Segoe UI", size, FontStyle.Bold, GraphicsUnit.Pixel))
+                using (var suffixFont = new Font("Segoe UI", size * 0.22f, FontStyle.Regular, GraphicsUnit.Pixel))
+                using (var dateFont = new Font("Segoe UI", Math.Max(22f, size * 0.14f), FontStyle.Regular, GraphicsUnit.Pixel))
+                {
+                    SizeF timeSizeMeasured = g.MeasureString(timeText, timeFont, PointF.Empty, StringFormat.GenericTypographic);
+                    SizeF suffixSize = g.MeasureString(amPmText, suffixFont, PointF.Empty, StringFormat.GenericTypographic);
+                    SizeF dateSize = g.MeasureString(dateText, dateFont, PointF.Empty, StringFormat.GenericTypographic);
+                    float dateGap = Math.Max(14f, size * 0.08f);
+                    float visibleTimeHeight = Math.Max(timeSizeMeasured.Height, size * 0.92f);
+                    float neededWidth = timeSizeMeasured.Width + suffixSize.Width + 58f;
+                    float neededHeight = visibleTimeHeight + dateGap + dateSize.Height + Math.Max(34f, area.Height * 0.12f);
+                    if (neededWidth <= area.Width && neededHeight <= area.Height)
+                    {
+                        return size;
+                    }
+                }
+
+                size *= 0.94f;
+            }
+
+            return size;
         }
 
         private void DrawHourly(Graphics g, RectangleF area, IList<HourlyForecast> hourly)
@@ -796,7 +938,7 @@ namespace WeatherClock
                 SizeF daySize = g.MeasureString(day, dayFont, PointF.Empty, StringFormat.GenericTypographic);
                 g.DrawString(day, dayFont, highBrush, cell.Left + (cell.Width - daySize.Width) / 2f, cell.Top + cell.Height * 0.10f, StringFormat.GenericTypographic);
 
-                float iconSize = Math.Min(cell.Width * 0.35f, cell.Height * 0.30f);
+                float iconSize = Math.Min(cell.Width * 0.44f, cell.Height * 0.38f);
                 DrawWeatherIcon(g, item.IconKey, new RectangleF(cell.Left + (cell.Width - iconSize) / 2f, cell.Top + cell.Height * 0.32f, iconSize, iconSize));
 
                 string high = item.High.HasValue ? item.High.Value.ToString(CultureInfo.InvariantCulture) + Degree : "--";
@@ -890,9 +1032,13 @@ namespace WeatherClock
                 return;
             }
 
-            if (WindowState == FormWindowState.Maximized)
+            if (isCustomMaximized || WindowState == FormWindowState.Maximized)
             {
-                Region = null;
+                using (var path = new GraphicsPath())
+                {
+                    path.AddRectangle(new RectangleF(0, 0, ClientSize.Width, ClientSize.Height));
+                    Region = new Region(path);
+                }
                 return;
             }
 
