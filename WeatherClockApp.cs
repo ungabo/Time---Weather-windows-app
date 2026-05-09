@@ -728,7 +728,7 @@ namespace WeatherClock
                 g.DrawString(temp, tempFont, mainBrush, tempX, tempY, StringFormat.GenericTypographic);
                 g.DrawString(Degree + "F", degreeFont, mainBrush, tempX + tempMeasure.Width + 4f, tempY + area.Height * 0.05f, StringFormat.GenericTypographic);
 
-                float conditionY = Math.Min(area.Bottom - area.Height * 0.30f, iconRect.Bottom + area.Height * 0.08f);
+                float conditionY = Math.Min(area.Bottom - area.Height * 0.30f, iconRect.Bottom + area.Height * 0.08f) + 8f;
                 using (var conditionFont = new Font("Segoe UI", Math.Max(13f, area.Height * 0.145f), FontStyle.Regular, GraphicsUnit.Pixel))
                 using (var feelsFont = new Font("Segoe UI", Math.Max(14f, area.Height * 0.16f), FontStyle.Regular, GraphicsUnit.Pixel))
                 using (var clipped = new StringFormat(StringFormat.GenericTypographic) { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
