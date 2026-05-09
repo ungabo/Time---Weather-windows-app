@@ -1,0 +1,288 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  background: #111820;
+  color: #f6fbff;
+  font-family: "Segoe UI", sans-serif;
+}
+
+.clock-shell {
+  position: relative;
+  width: min(96vw, 1280px);
+  aspect-ratio: 16 / 9;
+  min-height: 520px;
+  padding: 46px 26px 20px;
+  overflow: hidden;
+  border: 1px solid rgba(173, 190, 205, 0.72);
+  border-radius: 24px;
+  background:
+    linear-gradient(90deg, rgba(34, 69, 98, 0.22), transparent 36%, rgba(21, 56, 90, 0.15)),
+    linear-gradient(180deg, #030d15, #031929);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+.chrome {
+  position: absolute;
+  top: 18px;
+  right: 26px;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+.chrome span {
+  width: 30px;
+  height: 22px;
+  position: relative;
+}
+
+.chrome .city {
+  width: 180px;
+  height: auto;
+  color: #c8d8e7;
+  font-size: 14px;
+  text-align: right;
+}
+
+.chrome .city::before,
+.chrome .city::after {
+  display: none;
+}
+
+.chrome .gear::before {
+  width: 18px;
+  height: 18px;
+  left: 6px;
+  right: auto;
+  top: 2px;
+  border: 2px solid #fbf3ed;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.chrome .gear::after {
+  width: 6px;
+  height: 6px;
+  left: 12px;
+  right: auto;
+  top: 8px;
+  border: 2px solid #fbf3ed;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.chrome span::before,
+.chrome span::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  height: 3px;
+  border-radius: 999px;
+  background: #fbf3ed;
+}
+
+.chrome .close::before {
+  transform: rotate(45deg);
+}
+
+.chrome .close::after {
+  transform: rotate(-45deg);
+}
+
+.chrome .max::before {
+  left: 7px;
+  right: auto;
+  top: 3px;
+  width: 15px;
+  height: 15px;
+  border: 3px solid #fbf3ed;
+  background: transparent;
+}
+
+.chrome .max::after {
+  display: none;
+}
+
+.current {
+  height: 92px;
+  display: grid;
+  width: min(440px, 38vw);
+  grid-template-columns: 82px 152px 132px;
+  grid-template-rows: 58px 28px;
+  align-items: center;
+  border-bottom: 1px solid rgba(146, 167, 186, 0.22);
+}
+
+.current img {
+  grid-column: 1;
+  grid-row: 1;
+  width: 56px;
+  justify-self: center;
+  align-self: end;
+}
+
+.temperature {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: clamp(58px, 7vw, 76px);
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.temperature span {
+  vertical-align: top;
+  font-size: 0.34em;
+  margin-left: 8px;
+}
+
+.condition {
+  grid-column: 1;
+  grid-row: 2;
+  display: grid;
+  gap: 0;
+  align-self: start;
+  justify-self: center;
+  width: 82px;
+  font-size: 12px;
+  line-height: 1.05;
+}
+
+.condition span {
+  color: #b7c1d9;
+  font-size: 11px;
+}
+
+.metric {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  color: #b8bdca;
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.stacked {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: grid;
+  gap: 12px;
+}
+
+.metric b {
+  font-weight: 400;
+}
+
+.high b {
+  color: #f9cc36;
+}
+
+.low b {
+  color: #19bef6;
+}
+
+.time-block {
+  height: calc(100% - 92px - 130px - 122px - 24px);
+  min-height: 215px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+}
+
+.time {
+  font-size: clamp(148px, 17vw, 230px);
+  line-height: 0.86;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+
+.time span {
+  margin-left: 30px;
+  color: #b9c6e8;
+  font-size: 0.19em;
+  font-weight: 400;
+  vertical-align: baseline;
+}
+
+.date {
+  margin-top: 18px;
+  color: #b9c6e8;
+  font-size: clamp(30px, 2.7vw, 42px);
+  line-height: 1.1;
+}
+
+.strip {
+  width: 90.6%;
+  margin-inline: auto;
+  display: grid;
+  border: 1px solid rgba(128, 148, 169, 0.42);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(21, 42, 62, 0.72), rgba(8, 25, 39, 0.62));
+}
+
+.hourly {
+  height: 130px;
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.daily {
+  height: 122px;
+  margin-top: 12px;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.strip article {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-left: 1px solid rgba(128, 148, 169, 0.42);
+}
+
+.strip article:first-child {
+  border-left: 0;
+}
+
+.strip time {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.strip img {
+  width: 54px;
+}
+
+.hourly b {
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 300;
+}
+
+.daily p {
+  margin: 0;
+}
+
+.daily b,
+.daily span {
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 400;
+}
+
+.daily span {
+  color: #19bef6;
+}

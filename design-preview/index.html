@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weather Clock Preview</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="clock-shell">
+    <div class="chrome">
+      <span class="city">Ypsilanti, MI</span>
+      <span class="gear"></span>
+      <span></span>
+      <span class="max"></span>
+      <span class="close"></span>
+    </div>
+
+    <section class="current">
+      <img src="../Assets/ic_weather_partly_cloudy.png" alt="">
+      <div class="condition">
+        <strong>Partly Cloudy</strong>
+        <span>Feels like 68&deg;</span>
+      </div>
+      <div class="temperature">68<span>&deg;F</span></div>
+      <div class="stacked">
+        <div class="metric high">High <b>72&deg;</b></div>
+        <div class="metric low">Low <b>54&deg;</b></div>
+      </div>
+    </section>
+
+    <section class="time-block">
+      <div class="time">10:24<span>AM</span></div>
+      <div class="date">Saturday, May 24, 2025</div>
+    </section>
+
+    <section class="strip hourly">
+      <article><time>11 AM</time><img src="../Assets/ic_weather_partly_cloudy.png" alt=""><b>68&deg;</b></article>
+      <article><time>12 PM</time><img src="../Assets/ic_weather_sunny.png" alt=""><b>69&deg;</b></article>
+      <article><time>1 PM</time><img src="../Assets/ic_weather_partly_cloudy.png" alt=""><b>70&deg;</b></article>
+      <article><time>2 PM</time><img src="../Assets/ic_weather_cloudy.png" alt=""><b>71&deg;</b></article>
+      <article><time>3 PM</time><img src="../Assets/ic_weather_rain.png" alt=""><b>70&deg;</b></article>
+      <article><time>4 PM</time><img src="../Assets/ic_weather_cloudy.png" alt=""><b>68&deg;</b></article>
+    </section>
+
+    <section class="strip daily">
+      <article><time>SUN</time><img src="../Assets/ic_weather_partly_cloudy.png" alt=""><p><b>72&deg;</b><span>/54&deg;</span></p></article>
+      <article><time>MON</time><img src="../Assets/ic_weather_sunny.png" alt=""><p><b>75&deg;</b><span>/56&deg;</span></p></article>
+      <article><time>TUE</time><img src="../Assets/ic_weather_rain.png" alt=""><p><b>68&deg;</b><span>/52&deg;</span></p></article>
+      <article><time>WED</time><img src="../Assets/ic_weather_storm.png" alt=""><p><b>66&deg;</b><span>/50&deg;</span></p></article>
+      <article><time>THU</time><img src="../Assets/ic_weather_cloudy.png" alt=""><p><b>67&deg;</b><span>/51&deg;</span></p></article>
+      <article><time>FRI</time><img src="../Assets/ic_weather_partly_cloudy.png" alt=""><p><b>71&deg;</b><span>/53&deg;</span></p></article>
+      <article><time>SAT</time><img src="../Assets/ic_weather_sunny.png" alt=""><p><b>74&deg;</b><span>/55&deg;</span></p></article>
+    </section>
+  </main>
+</body>
+</html>
