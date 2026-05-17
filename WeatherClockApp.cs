@@ -820,8 +820,11 @@ namespace WeatherClock
                 {
                     float conditionWidth = Math.Max(iconSize + 52f, clusterWidth * 0.46f);
                     g.DrawString(snapshot.ConditionText, conditionFont, mainBrush, new RectangleF(iconRect.Left - 8f, conditionY, conditionWidth, area.Height * 0.24f), clipped);
-                    string feels = snapshot.FeelsLike.HasValue ? "Feels like " + snapshot.FeelsLike.Value.ToString(CultureInfo.InvariantCulture) + Degree : snapshot.StatusText;
-                    g.DrawString(feels, feelsFont, mutedBrush, new RectangleF(iconRect.Left - 8f, conditionY + area.Height * 0.22f, conditionWidth, area.Height * 0.24f), clipped);
+                    string updateAge = FormatUpdatedAgo(snapshot.LastUpdatedUtc);
+                    string detail = snapshot.FeelsLike.HasValue
+                        ? "Feels like " + snapshot.FeelsLike.Value.ToString(CultureInfo.InvariantCulture) + Degree + (string.IsNullOrEmpty(updateAge) ? string.Empty : " - " + updateAge)
+                        : FirstNonBlank(updateAge, snapshot.StatusText);
+                    g.DrawString(detail, feelsFont, mutedBrush, new RectangleF(iconRect.Left - 8f, conditionY + area.Height * 0.22f, conditionWidth, area.Height * 0.24f), clipped);
                 }
 
                 float stackLeft = tempX + tempMeasure.Width + degreeMeasure.Width + Math.Max(24f, area.Width * 0.03f);
@@ -848,6 +851,43 @@ namespace WeatherClock
             SizeF labelSize = g.MeasureString(label + " ", labelFont, PointF.Empty, StringFormat.GenericTypographic);
             g.DrawString(label, labelFont, labelBrush, x, y, StringFormat.GenericTypographic);
             g.DrawString(valueText, valueFont, valueBrush, x + labelSize.Width + 8f, y - 2f, StringFormat.GenericTypographic);
+        }
+
+        private static string FormatUpdatedAgo(DateTime? updatedUtc)
+        {
+            if (!updatedUtc.HasValue)
+            {
+                return string.Empty;
+            }
+
+            TimeSpan age = DateTime.UtcNow - updatedUtc.Value;
+            if (age.TotalSeconds < 90)
+            {
+                return "updated just now";
+            }
+            if (age.TotalMinutes < 60)
+            {
+                return "updated " + Math.Max(1, (int)Math.Round(age.TotalMinutes)).ToString(CultureInfo.InvariantCulture) + "m ago";
+            }
+            if (age.TotalHours < 24)
+            {
+                return "updated " + Math.Max(1, (int)Math.Round(age.TotalHours)).ToString(CultureInfo.InvariantCulture) + "h ago";
+            }
+
+            return "updated " + Math.Max(1, (int)Math.Round(age.TotalDays)).ToString(CultureInfo.InvariantCulture) + "d ago";
+        }
+
+        private static string FirstNonBlank(params string[] values)
+        {
+            foreach (string value in values)
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            return string.Empty;
         }
 
         private void DrawClock(Graphics g, RectangleF area)
@@ -1532,7 +1572,8 @@ namespace WeatherClock
                 IsRefreshing = false,
                 LocationName = displayName,
                 ConditionText = TitleCaseCondition(condition),
-                StatusText = "Updated " + DateTime.Now.ToString("h:mm tt", CultureInfo.InvariantCulture),
+                StatusText = "updated just now",
+                LastUpdatedUtc = DateTime.UtcNow,
                 CurrentTemperature = currentTemp,
                 FeelsLike = current.FeelsLikeF.HasValue ? current.FeelsLikeF : currentTemp,
                 TodayHigh = high,
@@ -2148,6 +2189,7 @@ namespace WeatherClock
         public string LocationName = string.Empty;
         public string ConditionText = "Loading";
         public string StatusText = string.Empty;
+        public DateTime? LastUpdatedUtc;
         public int? CurrentTemperature;
         public int? FeelsLike;
         public int? TodayHigh;
@@ -2204,6 +2246,7 @@ namespace WeatherClock
                 LocationName = LocationName,
                 ConditionText = ConditionText,
                 StatusText = StatusText,
+                LastUpdatedUtc = LastUpdatedUtc,
                 CurrentTemperature = CurrentTemperature,
                 FeelsLike = FeelsLike,
                 TodayHigh = TodayHigh,
