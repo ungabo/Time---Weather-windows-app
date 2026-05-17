@@ -88,9 +88,6 @@ namespace WeatherClock
 
         private const int WmGetMinMaxInfo = 0x0024;
         private const uint MonitorDefaultToNearest = 0x00000002;
-        private static readonly TimeSpan WeatherRefreshInterval = TimeSpan.FromMinutes(30);
-        private static readonly TimeSpan WeatherWatchdogInterval = TimeSpan.FromMinutes(5);
-        private static readonly TimeSpan WeatherRefreshStuckTimeout = TimeSpan.FromMinutes(3);
 
         private static readonly string Degree = ((char)176).ToString();
         private readonly System.Windows.Forms.Timer clockTimer;
@@ -104,8 +101,6 @@ namespace WeatherClock
         private string amPmText = string.Empty;
         private string dateText = string.Empty;
         private bool refreshInProgress;
-        private DateTime lastWeatherRefreshStartedUtc = DateTime.MinValue;
-        private DateTime lastWeatherRefreshCompletedUtc = DateTime.MinValue;
         private bool exiting;
         private RectangleF minimizeRect;
         private RectangleF maximizeRect;
@@ -168,13 +163,12 @@ namespace WeatherClock
             settings = SettingsStore.Load();
 
             clockTimer = new System.Windows.Forms.Timer { Interval = 1000 };
-            clockTimer.Tick += delegate { OnClockTimerTick(); };
+            clockTimer.Tick += delegate { UpdateClockText(); };
 
-            weatherTimer = new System.Windows.Forms.Timer { Interval = (int)WeatherWatchdogInterval.TotalMilliseconds };
-            weatherTimer.Tick += delegate { RefreshWeatherIfDue(); };
+            weatherTimer = new System.Windows.Forms.Timer { Interval = 30 * 60 * 1000 };
+            weatherTimer.Tick += delegate { RefreshWeather(); };
 
-            UpdateClockText(true);
-            ScheduleNextClockTick();
+            UpdateClockText();
             clockTimer.Start();
             weatherTimer.Start();
         }
@@ -215,9 +209,9 @@ namespace WeatherClock
 
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
-            g.CompositingQuality = CompositingQuality.AssumeLinear;
-            g.PixelOffsetMode = PixelOffsetMode.Half;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.CompositingQuality = CompositingQuality.HighQuality;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
             Rectangle bounds = ClientRectangle;
@@ -314,16 +308,12 @@ namespace WeatherClock
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
-            bool changed = minimizeHot || maximizeHot || closeHot || settingsHot;
             minimizeHot = false;
             maximizeHot = false;
             closeHot = false;
             settingsHot = false;
             Cursor = Cursors.Default;
-            if (changed)
-            {
-                Invalidate();
-            }
+            Invalidate();
         }
 
         protected override void OnClick(EventArgs e)
@@ -544,80 +534,20 @@ namespace WeatherClock
             }
         }
 
-        private void OnClockTimerTick()
-        {
-            UpdateClockText(false);
-            ScheduleNextClockTick();
-        }
-
-        private void ScheduleNextClockTick()
+        private void UpdateClockText()
         {
             DateTime now = DateTime.Now;
-            DateTime nextMinute = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0).AddMinutes(1).AddMilliseconds(250);
-            int interval = (int)Math.Max(250d, Math.Min(65000d, (nextMinute - now).TotalMilliseconds));
-            clockTimer.Interval = interval;
-        }
-
-        private bool UpdateClockText(bool force)
-        {
-            DateTime now = DateTime.Now;
-            string nextTimeText = now.ToString("h:mm", CultureInfo.InvariantCulture);
-            string nextAmPmText = now.ToString("tt", CultureInfo.InvariantCulture);
-            string nextDateText = now.ToString("dddd, MMMM d, yyyy", CultureInfo.InvariantCulture);
-            bool changed = force
-                || nextTimeText != timeText
-                || nextAmPmText != amPmText
-                || nextDateText != dateText;
-
-            if (!changed)
-            {
-                return false;
-            }
-
-            timeText = nextTimeText;
-            amPmText = nextAmPmText;
-            dateText = nextDateText;
+            timeText = now.ToString("h:mm", CultureInfo.InvariantCulture);
+            amPmText = now.ToString("tt", CultureInfo.InvariantCulture);
+            dateText = now.ToString("dddd, MMMM d, yyyy", CultureInfo.InvariantCulture);
             string trayText = timeText + " " + amPmText;
-            string nextTrayText = trayText.Length <= 63 ? trayText : "Weather Clock";
-            if (trayIcon.Text != nextTrayText)
-            {
-                trayIcon.Text = nextTrayText;
-            }
+            trayIcon.Text = trayText.Length <= 63 ? trayText : "Weather Clock";
             Invalidate();
-            return true;
         }
 
         private void RefreshWeather()
         {
             RefreshWeather(false);
-        }
-
-        private void RefreshWeatherIfDue()
-        {
-            if (!settings.IsComplete)
-            {
-                return;
-            }
-
-            DateTime now = DateTime.UtcNow;
-            if (refreshInProgress)
-            {
-                if (lastWeatherRefreshStartedUtc != DateTime.MinValue
-                    && now - lastWeatherRefreshStartedUtc > WeatherRefreshStuckTimeout)
-                {
-                    refreshInProgress = false;
-                }
-                else
-                {
-                    return;
-                }
-            }
-
-            if (lastWeatherRefreshCompletedUtc == DateTime.MinValue
-                || now - lastWeatherRefreshCompletedUtc >= WeatherRefreshInterval)
-            {
-                RefreshWeather(false);
-            }
         }
 
         private void RefreshWeather(bool force)
@@ -628,26 +558,15 @@ namespace WeatherClock
             }
 
             refreshInProgress = true;
-            lastWeatherRefreshStartedUtc = DateTime.UtcNow;
-            bool repaintForLoading = false;
             lock (weatherLock)
             {
-                if (!weather.HasData || force)
-                {
-                    weather = WeatherSnapshot.Loading("Loading weather");
-                    weather.LocationName = settings.SelectedCityDisplay;
-                    repaintForLoading = true;
-                }
-                else if (string.IsNullOrWhiteSpace(weather.LocationName))
+                weather = weather.HasData ? weather.WithRefreshing() : WeatherSnapshot.Loading("Loading weather");
+                if (string.IsNullOrWhiteSpace(weather.LocationName))
                 {
                     weather.LocationName = settings.SelectedCityDisplay;
-                    repaintForLoading = true;
                 }
             }
-            if (repaintForLoading)
-            {
-                Invalidate();
-            }
+            Invalidate();
 
             ThreadPool.QueueUserWorkItem(delegate
             {
@@ -666,10 +585,6 @@ namespace WeatherClock
                     lock (weatherLock)
                     {
                         weather = next;
-                    }
-                    if (next.HasData)
-                    {
-                        lastWeatherRefreshCompletedUtc = DateTime.UtcNow;
                     }
                     refreshInProgress = false;
                     Invalidate();
@@ -1135,7 +1050,6 @@ namespace WeatherClock
 
         private void MinimizeToTray()
         {
-            clockTimer.Stop();
             trayIcon.Visible = true;
             ShowInTaskbar = false;
             Hide();
@@ -1153,11 +1067,7 @@ namespace WeatherClock
             WindowState = FormWindowState.Normal;
             trayIcon.Visible = false;
             Activate();
-            UpdateClockText(true);
-            ScheduleNextClockTick();
-            clockTimer.Start();
-            weatherTimer.Start();
-            RefreshWeatherIfDue();
+            Invalidate();
         }
     }
 
@@ -1714,7 +1624,7 @@ namespace WeatherClock
             IOException lastError = null;
             for (int attempt = 1; attempt <= 4; attempt++)
             {
-                using (var client = new TimeoutWebClient())
+                using (var client = new WebClient())
                 {
                     client.Headers[HttpRequestHeader.UserAgent] = "WeatherClock/1.0 (" + email + ")";
                     client.Headers[HttpRequestHeader.Accept] = "application/geo+json";
@@ -1737,25 +1647,6 @@ namespace WeatherClock
             }
 
             throw lastError ?? new IOException("NWS request failed.");
-        }
-
-        private sealed class TimeoutWebClient : WebClient
-        {
-            protected override WebRequest GetWebRequest(Uri address)
-            {
-                WebRequest request = base.GetWebRequest(address);
-                if (request != null)
-                {
-                    request.Timeout = 15000;
-                    HttpWebRequest http = request as HttpWebRequest;
-                    if (http != null)
-                    {
-                        http.ReadWriteTimeout = 15000;
-                    }
-                }
-
-                return request;
-            }
         }
 
         private static bool ShouldRetry(WebException ex)
