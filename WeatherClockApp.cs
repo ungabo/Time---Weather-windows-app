@@ -91,6 +91,7 @@ namespace WeatherClock
         private static readonly TimeSpan WeatherRefreshInterval = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan WeatherWatchdogInterval = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan WeatherRefreshStuckTimeout = TimeSpan.FromMinutes(3);
+        private const string UpdatedAgeSuffix = ""; // Change to " ago" to restore labels like "8m ago".
 
         private static readonly string Degree = ((char)176).ToString();
         private readonly System.Windows.Forms.Timer clockTimer;
@@ -874,18 +875,18 @@ namespace WeatherClock
             TimeSpan age = DateTime.UtcNow - updatedUtc.Value;
             if (age.TotalSeconds < 60)
             {
-                return "<1m ago";
+                return "<1m" + UpdatedAgeSuffix;
             }
             if (age.TotalMinutes < 60)
             {
-                return Math.Max(1, (int)Math.Floor(age.TotalMinutes)).ToString(CultureInfo.InvariantCulture) + "m ago";
+                return Math.Max(1, (int)Math.Floor(age.TotalMinutes)).ToString(CultureInfo.InvariantCulture) + "m" + UpdatedAgeSuffix;
             }
             if (age.TotalHours < 24)
             {
-                return Math.Max(1, (int)Math.Floor(age.TotalHours)).ToString(CultureInfo.InvariantCulture) + "h ago";
+                return Math.Max(1, (int)Math.Floor(age.TotalHours)).ToString(CultureInfo.InvariantCulture) + "h" + UpdatedAgeSuffix;
             }
 
-            return Math.Max(1, (int)Math.Floor(age.TotalDays)).ToString(CultureInfo.InvariantCulture) + "d ago";
+            return Math.Max(1, (int)Math.Floor(age.TotalDays)).ToString(CultureInfo.InvariantCulture) + "d" + UpdatedAgeSuffix;
         }
 
         private static string FirstNonBlank(params string[] values)
