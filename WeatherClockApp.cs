@@ -810,8 +810,9 @@ namespace WeatherClock
                 SizeF tempMeasure = g.MeasureString(temp, tempFont, PointF.Empty, StringFormat.GenericTypographic);
                 SizeF degreeMeasure = g.MeasureString(Degree + "F", degreeFont, PointF.Empty, StringFormat.GenericTypographic);
                 float tempY = area.Top + (area.Height - tempMeasure.Height) / 2f - area.Height * 0.02f;
+                float degreeY = tempY + area.Height * 0.05f;
                 g.DrawString(temp, tempFont, mainBrush, tempX, tempY, StringFormat.GenericTypographic);
-                g.DrawString(Degree + "F", degreeFont, mainBrush, tempX + tempMeasure.Width + 4f, tempY + area.Height * 0.05f, StringFormat.GenericTypographic);
+                g.DrawString(Degree + "F", degreeFont, mainBrush, tempX + tempMeasure.Width + 4f, degreeY, StringFormat.GenericTypographic);
 
                 float conditionY = Math.Min(area.Bottom - area.Height * 0.30f, iconRect.Bottom + area.Height * 0.08f) + 8f;
                 using (var conditionFont = new Font("Segoe UI", Math.Max(13f, area.Height * 0.145f), FontStyle.Regular, GraphicsUnit.Pixel))
@@ -824,33 +825,43 @@ namespace WeatherClock
                     string detail = snapshot.FeelsLike.HasValue
                         ? "Feels like " + snapshot.FeelsLike.Value.ToString(CultureInfo.InvariantCulture) + Degree + (string.IsNullOrEmpty(updateAge) ? string.Empty : " - " + updateAge)
                         : FirstNonBlank(updateAge, snapshot.StatusText);
-                    g.DrawString(detail, feelsFont, mutedBrush, new RectangleF(iconRect.Left - 8f, conditionY + area.Height * 0.22f, conditionWidth, area.Height * 0.24f), clipped);
-                }
+                    var feelsRect = new RectangleF(iconRect.Left - 8f, conditionY + area.Height * 0.22f, conditionWidth, area.Height * 0.24f);
+                    g.DrawString(detail, feelsFont, mutedBrush, feelsRect, clipped);
 
-                float stackLeft = tempX + tempMeasure.Width + degreeMeasure.Width + Math.Max(24f, area.Width * 0.03f);
-                float minStackLeft = area.Left + area.Width * 0.24f;
-                if (stackLeft < minStackLeft)
-                {
-                    stackLeft = minStackLeft;
-                }
-                using (var labelFont = new Font("Segoe UI", Math.Max(13f, area.Height * 0.15f), FontStyle.Regular, GraphicsUnit.Pixel))
-                using (var valueFont = new Font("Segoe UI", Math.Max(15f, area.Height * 0.17f), FontStyle.Regular, GraphicsUnit.Pixel))
-                using (var labelBrush = new SolidBrush(Color.FromArgb(178, 205, 210, 221)))
-                using (var highBrush = new SolidBrush(Color.FromArgb(255, 249, 203, 56)))
-                using (var lowBrush = new SolidBrush(Color.FromArgb(255, 25, 190, 246)))
-                {
-                    DrawInlinePair(g, "High", snapshot.TodayHigh, labelFont, valueFont, labelBrush, highBrush, stackLeft, area.Top + area.Height * 0.22f);
-                    DrawInlinePair(g, "Low", snapshot.TodayLow, labelFont, valueFont, labelBrush, lowBrush, stackLeft, area.Top + area.Height * 0.53f);
+                    float stackLeft = tempX + tempMeasure.Width + degreeMeasure.Width + Math.Max(24f, area.Width * 0.03f);
+                    float minStackLeft = area.Left + area.Width * 0.24f;
+                    if (stackLeft < minStackLeft)
+                    {
+                        stackLeft = minStackLeft;
+                    }
+
+                    float stackTop = degreeY;
+                    float stackBottom = feelsRect.Bottom;
+                    float stackHeight = Math.Max(area.Height * 0.52f, stackBottom - stackTop);
+                    float rowGap = Math.Max(2f, stackHeight * 0.06f);
+                    float rowHeight = (stackHeight - rowGap) / 2f;
+                    using (var labelFont = new Font("Segoe UI", Math.Max(13f, rowHeight * 0.34f), FontStyle.Regular, GraphicsUnit.Pixel))
+                    using (var valueFont = new Font("Segoe UI", Math.Max(24f, rowHeight * 0.78f), FontStyle.Regular, GraphicsUnit.Pixel))
+                    using (var labelBrush = new SolidBrush(Color.FromArgb(178, 205, 210, 221)))
+                    using (var highBrush = new SolidBrush(Color.FromArgb(255, 249, 203, 56)))
+                    using (var lowBrush = new SolidBrush(Color.FromArgb(255, 25, 190, 246)))
+                    {
+                        DrawStackedTempPair(g, "High", snapshot.TodayHigh, labelFont, valueFont, labelBrush, highBrush, stackLeft, stackTop, rowHeight);
+                        DrawStackedTempPair(g, "Low", snapshot.TodayLow, labelFont, valueFont, labelBrush, lowBrush, stackLeft, stackTop + rowHeight + rowGap, rowHeight);
+                    }
                 }
             }
         }
 
-        private void DrawInlinePair(Graphics g, string label, int? value, Font labelFont, Font valueFont, Brush labelBrush, Brush valueBrush, float x, float y)
+        private void DrawStackedTempPair(Graphics g, string label, int? value, Font labelFont, Font valueFont, Brush labelBrush, Brush valueBrush, float x, float y, float rowHeight)
         {
             string valueText = value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) + Degree : "--";
-            SizeF labelSize = g.MeasureString(label + " ", labelFont, PointF.Empty, StringFormat.GenericTypographic);
-            g.DrawString(label, labelFont, labelBrush, x, y, StringFormat.GenericTypographic);
-            g.DrawString(valueText, valueFont, valueBrush, x + labelSize.Width + 8f, y - 2f, StringFormat.GenericTypographic);
+            SizeF labelSize = g.MeasureString(label, labelFont, PointF.Empty, StringFormat.GenericTypographic);
+            SizeF valueSize = g.MeasureString(valueText, valueFont, PointF.Empty, StringFormat.GenericTypographic);
+            float labelY = y + (rowHeight - labelSize.Height) / 2f;
+            float valueY = y + (rowHeight - valueSize.Height) / 2f - Math.Max(1f, rowHeight * 0.03f);
+            g.DrawString(label, labelFont, labelBrush, x, labelY, StringFormat.GenericTypographic);
+            g.DrawString(valueText, valueFont, valueBrush, x + labelSize.Width + Math.Max(8f, rowHeight * 0.20f), valueY, StringFormat.GenericTypographic);
         }
 
         private static string FormatUpdatedAgo(DateTime? updatedUtc)
