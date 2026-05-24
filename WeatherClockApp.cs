@@ -872,20 +872,20 @@ namespace WeatherClock
             }
 
             TimeSpan age = DateTime.UtcNow - updatedUtc.Value;
-            if (age.TotalSeconds < 90)
+            if (age.TotalSeconds < 60)
             {
-                return "updated just now";
+                return "<1m ago";
             }
             if (age.TotalMinutes < 60)
             {
-                return "updated " + Math.Max(1, (int)Math.Round(age.TotalMinutes)).ToString(CultureInfo.InvariantCulture) + "m ago";
+                return Math.Max(1, (int)Math.Floor(age.TotalMinutes)).ToString(CultureInfo.InvariantCulture) + "m ago";
             }
             if (age.TotalHours < 24)
             {
-                return "updated " + Math.Max(1, (int)Math.Round(age.TotalHours)).ToString(CultureInfo.InvariantCulture) + "h ago";
+                return Math.Max(1, (int)Math.Floor(age.TotalHours)).ToString(CultureInfo.InvariantCulture) + "h ago";
             }
 
-            return "updated " + Math.Max(1, (int)Math.Round(age.TotalDays)).ToString(CultureInfo.InvariantCulture) + "d ago";
+            return Math.Max(1, (int)Math.Floor(age.TotalDays)).ToString(CultureInfo.InvariantCulture) + "d ago";
         }
 
         private static string FirstNonBlank(params string[] values)
@@ -1583,7 +1583,7 @@ namespace WeatherClock
                 IsRefreshing = false,
                 LocationName = displayName,
                 ConditionText = TitleCaseCondition(condition),
-                StatusText = "updated just now",
+                StatusText = "<1m ago",
                 LastUpdatedUtc = DateTime.UtcNow,
                 CurrentTemperature = currentTemp,
                 FeelsLike = current.FeelsLikeF.HasValue ? current.FeelsLikeF : currentTemp,
