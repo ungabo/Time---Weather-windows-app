@@ -2,6 +2,8 @@
 
 A borderless Windows desktop application that combines a real-time clock with current weather conditions and forecasts. The app displays weather from NOAA using your location zip code and email.
 
+![Weather Clock app screenshot](native-preview.png)
+
 ## Features
 
 - **Real-time Clock**: Large, high-quality display of current time with AM/PM indicator and date
