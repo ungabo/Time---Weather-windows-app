@@ -822,10 +822,9 @@ namespace WeatherClock
                 {
                     float conditionWidth = Math.Max(iconSize + 52f, clusterWidth * 0.46f);
                     g.DrawString(snapshot.ConditionText, conditionFont, mainBrush, new RectangleF(iconRect.Left - 8f, conditionY, conditionWidth, area.Height * 0.24f), clipped);
-                    string updateAge = FormatUpdatedAgo(snapshot.LastUpdatedUtc);
                     string detail = snapshot.FeelsLike.HasValue
-                        ? "Feels like " + snapshot.FeelsLike.Value.ToString(CultureInfo.InvariantCulture) + Degree + (string.IsNullOrEmpty(updateAge) ? string.Empty : " - " + updateAge)
-                        : FirstNonBlank(updateAge, snapshot.StatusText);
+                        ? "Feels like " + snapshot.FeelsLike.Value.ToString(CultureInfo.InvariantCulture) + Degree
+                        : (snapshot.HasData ? string.Empty : snapshot.StatusText);
                     var feelsRect = new RectangleF(iconRect.Left - 8f, conditionY + area.Height * 0.22f, conditionWidth, area.Height * 0.24f);
                     g.DrawString(detail, feelsFont, mutedBrush, feelsRect, clipped);
 
@@ -865,6 +864,7 @@ namespace WeatherClock
             g.DrawString(valueText, valueFont, valueBrush, x + labelSize.Width + Math.Max(8f, rowHeight * 0.20f), valueY, StringFormat.GenericTypographic);
         }
 
+        // Retained for quickly restoring freshness labels later if wanted.
         private static string FormatUpdatedAgo(DateTime? updatedUtc)
         {
             if (!updatedUtc.HasValue)
@@ -1584,7 +1584,7 @@ namespace WeatherClock
                 IsRefreshing = false,
                 LocationName = displayName,
                 ConditionText = TitleCaseCondition(condition),
-                StatusText = "<1m ago",
+                StatusText = string.Empty,
                 LastUpdatedUtc = DateTime.UtcNow,
                 CurrentTemperature = currentTemp,
                 FeelsLike = current.FeelsLikeF.HasValue ? current.FeelsLikeF : currentTemp,
